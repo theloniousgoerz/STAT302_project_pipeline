@@ -1,0 +1,107 @@
+---
+title: "Analysis"
+author: "Thelonious Goerz"
+date: "6/8/2021"
+output: html_document
+---
+
+```{r, message = F}
+# Load packages 
+library(tidyverse)
+library(ggpubr)
+library(kableExtra)
+library(knitr)
+# Save data. 
+my_gapminder <- gapminder::gapminder
+# Save to csv. 
+write.csv(my_gapminder, file = "../Data/my_gapminder.csv")
+my_penguins <- palmerpenguins::penguins
+# Save to csv.
+write.csv(my_penguins, file = "../Data/my_penguins.csv")
+# Load My_rf_cv. 
+source("../Code/my_rf_cv.r")
+```
+
+# Tutorial for my_rf_cv
+
+In this section I demonstrate a tutorial for `my_rf_cv` which usess the `palmerpenguins` package. In this example, I predict `body_mass_g` based on `bill_length_mm`, `bill_depth_mm`, and `flipper_length_mm`. The number of trees is `100`
+
+```{r, fig.align="center",fig.cap="Boxplots of CV error for 30 simulations accross different values of K", fig.width=10,fig.height=8}
+# Compute CV MSE 30 times for different Ks. 
+set.seed(1)
+# Define an empty list
+cv_estimate_mse <- list()
+# Iterate through each K.
+for (i in c(2,5,10)) {
+  # For each K sample 30 times. 
+  for (j in 1:30) {
+  cv_estimate_mse[paste0("mse_",i,"_iter_",j)] <- my_rf_cv(k = i)
+  }
+}
+# Create a data frame of the errors.
+rf_cv_data <- tibble(k_2 = unlist(cv_estimate_mse[1:30]),
+       # Unlist each 30 errors and label them k. 
+       k_5 = unlist(cv_estimate_mse[31:60]),
+       k_10 = unlist(cv_estimate_mse[61:90]))
+# Save data 
+write.csv(rf_cv_data, file = "../Output/rf_cv_data.csv")
+
+
+# Boxplot for K = 2
+rf_cv_plot_2 <- rf_cv_data %>% 
+  # Select K leve.
+  ggplot(aes(x = k_2)) + 
+  # Boxplot. 
+  geom_boxplot() + 
+  # Flip the direction of the axes.
+  coord_flip() +
+  # Fix labels.
+  labs(x = "",
+       y = "Estimated RF CV error",
+       title = "Distribution of RF CV_error for K = 2")
+# Boxplot for K = 5.
+rf_cv_plot_5 <- rf_cv_data %>% 
+  ggplot(aes(x = k_5)) + 
+  geom_boxplot() + 
+  coord_flip() + 
+  labs(x = " ",
+       y = "Estimated RF CV error",
+       title = "Distribution of RF CV_error for K = 5")
+# Boxplot for K = 10. 
+rf_cv_plot_10 <-  rf_cv_data %>% 
+  ggplot(aes(x = k_10)) + 
+  geom_boxplot() + 
+  coord_flip() + 
+  labs(x = "",
+       y = "Estimated RF CV error",
+       title = "Distribution of RF CV_error for K = 10")
+sim_plot <- ggarrange(rf_cv_plot_2,rf_cv_plot_5,rf_cv_plot_10)
+# Show plot
+sim_plot
+# Save plot 
+ggsave(sim_plot,filename = "../Output/Figures/rf_sim_plot.png")
+```
+
+In the above plot, I show the how the distribution of the 30 CV errors varies accross different values of K. 
+
+Below, I create a plot that summarizes these values numerically. 
+
+```{r, fig.cap = "Summary of CV error for different values of K"}
+# Create a table with RF CV values for each K. 
+# Create labels for each K. 
+rf_summary_table <- tibble(K = c(2,5,10),
+       # Calculate the mean for each K. 
+       mean = c(mean(rf_cv_data$k_2),
+                mean(rf_cv_data$k_5),
+                mean(rf_cv_data$k_10)),
+       # Calculate the SD for each K. 
+       sd = c(sd(rf_cv_data$k_2),
+                sd(rf_cv_data$k_5),
+                sd(rf_cv_data$k_10)))
+# Show results 
+rf_summary_table
+# save results
+saveRDS(rf_summary_table,file = "../Output/rf_summary_table.rds")
+```
+
+This plot summarizes the mean and standard deviations of each 30 simulations with different numbers of folds in the random forest cross validation. In this case, it is clear that as the number of Ks increases the mean and standard deviation decreases and then increaes. Overall, the optimal cross validation number of folds is 5, because it has the lowest CV mean and the lowest CV SD. I think that the optimal k is 5 beause, if one adds more folds, then the testing set begins to get much smaller, so there is a lot less data to predict on. This results in more error overall -- so finding a balance between folds and number of trees is key. 
